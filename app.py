@@ -5,16 +5,18 @@ from io import BytesIO
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+import folium
+from streamlit_folium import st_folium
 
 # Page config
 st.set_page_config(
-    page_title="India Reisen - Itinerary Generator",
+    page_title="India Reisen - Full Service Itinerary Generator",
     page_icon="🌸",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS with India Reisen branding
+# Custom CSS
 st.markdown("""
 <style>
     :root {
@@ -54,123 +56,320 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ==================== HOTEL DATABASE ====================
-HOTEL_DATABASE = {
-    "Delhi": [
-        {"name": "The Oberoi Delhi", "category": "5-star", "description": "Luxury palace hotel with world-class spa and fine dining", "price_range": "$$$"},
-        {"name": "ITC Maurya New Delhi", "category": "5-star", "description": "Business luxury in prestigious Diplomatic Enclave", "price_range": "$$$"},
-        {"name": "Taj Palace New Delhi", "category": "5-star", "description": "Iconic heritage luxury hotel with excellent service", "price_range": "$$$"},
-    ],
-    "Jaipur": [
-        {"name": "Rambagh Palace", "category": "5-star", "description": "Historic royal palace turned luxury hotel with heritage charm", "price_range": "$$$"},
-        {"name": "Taj Amar Palace", "category": "5-star", "description": "Elegant property with stunning views of City Palace", "price_range": "$$"},
-        {"name": "Alsisar Haveli", "category": "4-star", "description": "Boutique heritage property in historic old city", "price_range": "$$"},
-    ],
-    "Agra": [
-        {"name": "The Oberoi Amar Vilas", "category": "5-star", "description": "Iconic luxury with iconic Taj Mahal views from rooms", "price_range": "$$$"},
-        {"name": "ITC Mughal Agra", "category": "5-star", "description": "Mughal-inspired architecture with heritage gardens", "price_range": "$$$"},
-        {"name": "Taj Hotel Agra", "category": "4-star", "description": "Heritage property opposite Taj Mahal gate", "price_range": "$$"},
-    ],
-    "Varanasi": [
-        {"name": "Taj Ganges Varanasi", "category": "5-star", "description": "Riverside luxury overlooking the sacred Ganges with ghats access", "price_range": "$$"},
-        {"name": "The Brijrama Palace", "category": "5-star", "description": "Boutique palace hotel directly on sacred ghats", "price_range": "$$$"},
-        {"name": "Radisson Blu Varanasi", "category": "4-star", "description": "Contemporary comfort with Ganges riverside location", "price_range": "$$"},
-    ],
-    "Mumbai": [
-        {"name": "Taj Palace Mumbai", "category": "5-star", "description": "Iconic beachfront luxury in historic Colaba area", "price_range": "$$$"},
-        {"name": "The Oberoi Mumbai", "category": "5-star", "description": "Marine Drive waterfront elegance with ocean views", "price_range": "$$$"},
-        {"name": "JW Marriott Mumbai", "category": "5-star", "description": "Business luxury in South Mumbai central location", "price_range": "$$"},
-    ],
-    "Goa": [
-        {"name": "The Oberoi Beach Resort Goa", "category": "5-star", "description": "Beachfront paradise with water sports and activities", "price_range": "$$$"},
-        {"name": "Taj Exotica Goa", "category": "5-star", "description": "All-inclusive resort with private beach and entertainment", "price_range": "$$$"},
-        {"name": "Leela Goa", "category": "5-star", "description": "Portuguese-influenced luxury resort with heritage vibes", "price_range": "$$"},
-    ],
-    "Udaipur": [
-        {"name": "Taj Lake Palace", "category": "5-star", "description": "Floating marble palace on Lake Pichola - dream destination", "price_range": "$$$"},
-        {"name": "The Oberoi Udaivilas", "category": "5-star", "description": "Palatial luxury overlooking Lake Pichola with boats", "price_range": "$$$"},
-        {"name": "Leela Palace Udaipur", "category": "5-star", "description": "Modern palace architecture with magnificent lake views", "price_range": "$$$"},
-    ],
-    "Rishikesh": [
-        {"name": "The Oberoi Rishikesh", "category": "5-star", "description": "Spiritual luxury on sacred Ganges banks with yoga programs", "price_range": "$$"},
-        {"name": "Ananda in the Himalayas", "category": "5-star", "description": "Wellness retreat with yoga, meditation and ayurvedic spa", "price_range": "$$$"},
-        {"name": "Rishikesh Valley Resort", "category": "4-star", "description": "Peaceful ashram-style accommodation with spiritual focus", "price_range": "$"},
-    ],
-    "Kerala": [
-        {"name": "Taj Bekal Resort & Spa", "category": "5-star", "description": "Luxury in Kerala backwaters with houseboat experiences", "price_range": "$$$"},
-        {"name": "The Oberoi Zarai Kumarakom", "category": "5-star", "description": "Backwater resort with ayurvedic spa and water activities", "price_range": "$$$"},
-        {"name": "Kumarakom Lake Resort", "category": "5-star", "description": "Traditional Kerala resort in lush coconut groves", "price_range": "$$"},
-    ],
+# City coordinates for mapping
+CITY_COORDINATES = {
+    # North India
+    "Delhi": (28.6139, 77.2090),
+    "Agra": (27.1767, 78.0081),
+    "Jaipur": (26.9124, 75.7873),
+    "Amritsar": (31.6340, 74.8711),
+    "Varanasi": (25.3268, 82.9856),
+    "Shimla": (31.7725, 77.1740),
+    "Manali": (32.2396, 77.1887),
+    "Leh": (34.1526, 77.5771),
+    "Rishikesh": (30.0887, 78.2672),
+    "Haridwar": (29.9457, 78.1642),
+    # West India
+    "Mumbai": (19.0760, 72.8777),
+    "Goa": (15.3008, 73.8207),
+    "Udaipur": (24.5854, 73.7125),
+    "Jodhpur": (26.2389, 73.0243),
+    "Jaisalmer": (26.9124, 70.9185),
+    "Ahmedabad": (23.0225, 72.5714),
+    "Pune": (18.5204, 73.8567),
+    # South India
+    "Kochi": (9.9312, 76.2673),
+    "Munnar": (10.5869, 77.0582),
+    "Thiruvananthapuram": (8.5241, 76.9366),
+    "Chennai": (13.0827, 80.2707),
+    "Mysore": (12.2958, 76.6394),
+    "Ooty": (11.4102, 76.6955),
+    "Bengaluru": (12.9716, 77.5946),
+    # East & Northeast
+    "Kolkata": (22.5726, 88.3639),
+    "Darjeeling": (27.0410, 88.2663),
+    "Gangtok": (27.5330, 88.6109),
+    "Kaziranga": (26.6307, 93.1872),
+    # Nepal
+    "Kathmandu": (27.7172, 85.3240),
+    "Pokhara": (28.2096, 83.9856),
+    "Chitwan": (27.5769, 84.4200),
+    "Lumbini": (27.4926, 82.4997),
+    # Bhutan
+    "Thimphu": (27.5142, 89.6430),
+    "Paro": (27.4283, 89.6233),
+    "Punakha": (27.6039, 89.7535),
 }
 
-# ==================== PRE-BUILT ITINERARY TEMPLATES ====================
-ITINERARY_TEMPLATES = {
-    "Delhi-Jaipur-Agra": {
-        "title": "Golden Triangle: Delhi, Jaipur & Agra",
-        "overview": "Experience the classic Golden Triangle route spanning India's most iconic destinations. Explore the bustling streets of Delhi, the pink city charm of Jaipur, and the timeless beauty of the Taj Mahal in Agra.",
-        "best_time": "October to March (pleasant weather, ideal for sightseeing)",
-        "budget_estimate": "$1,200-1,800 per person for 7 days",
-        "visa_info": "Indian Tourist Visa (60 days) required for most nationalities",
-        "best_experiences": [
-            "Watch sunset from Taj Mahal (most magical time)",
-            "Explore Jaipur's City Palace and Old City bazaars",
-            "Visit India Gate and Red Fort in Delhi",
-            "Camel safari in Jaipur (Amer Fort approach)",
-            "Street food tour in Delhi's Old Delhi"
-        ],
-        "packing_tips": [
-            "Light cotton clothes for hot days",
-            "Comfortable walking shoes (you'll walk 10,000+ steps daily)",
-            "Sun protection: hat, sunscreen, sunglasses",
-            "Lightweight scarf for temple visits",
-            "Power bank for phone charging",
-            "Adapters for Indian plugs"
-        ],
-        "days": [
-            {"day": 1, "city": "Delhi", "temperature": "25°C (Oct-Mar)", "cultural_notes": "Delhi is the capital of India and a blend of Mughal history and modern India. From ancient monuments to bustling markets, Delhi represents India's journey through centuries.", "activities": ["Arrive and settle at hotel", "Evening stroll through Connaught Place or Khan Market", "Traditional Indian dinner at a local restaurant"], "meals": {"breakfast": "Hotel breakfast or local café", "lunch": "Mughlai cuisine at a heritage restaurant", "dinner": "Street food at Chandni Chowk or restaurant meal"}},
-            {"day": 2, "city": "Delhi", "temperature": "25°C", "cultural_notes": "Delhi's historical monuments represent layers of Indian history - from Mughal grandeur to British colonial architecture.", "activities": ["Visit India Gate (British memorial, iconic landmark)", "Explore Red Fort (Mughal palace fortress)", "Walk through Jama Masjid (India's largest mosque)", "Old Delhi bazaar street food tour"], "meals": {"breakfast": "Traditional paratha with chai", "lunch": "Biryani or kebabs in Old Delhi", "dinner": "Fine dining Mughlai or international cuisine"}},
-            {"day": 3, "city": "Delhi → Jaipur", "temperature": "26°C", "cultural_notes": "Travel to Jaipur (240 km, 4-5 hours by road or 4.5 hours by train). Jaipur, founded in 1727, is known as the Pink City for its distinctive pink-colored buildings.", "activities": ["Morning departure from Delhi", "Afternoon arrival in Jaipur", "Evening exploration of Jaipur's City Palace surroundings", "Sunset at Nahargarh Fort viewpoint"], "meals": {"breakfast": "Early breakfast before departure", "lunch": "En-route at highway restaurant or Jaipur arrival", "dinner": "Traditional Rajasthani dinner"}},
-            {"day": 4, "city": "Jaipur", "temperature": "28°C", "cultural_notes": "Jaipur is the capital of Rajasthan, known for its grand palaces, magnificent forts, and vibrant culture. The city was designed on a grid pattern influenced by Hindu and Mughal architecture.", "activities": ["Visit Amer Fort (hilltop palace with elephant rides)", "Explore Jantar Mantar (astronomical observation site)", "Walk through City Palace complex", "Shopping at local bazaars (textiles, jewelry)"], "meals": {"breakfast": "Hotel breakfast or local café with lassi", "lunch": "Dal baati churma or paneer tikka masala", "dinner": "Gatte ki sabzi or laal maas (Rajasthani cuisine)"}},
-            {"day": 5, "city": "Jaipur", "temperature": "28°C", "cultural_notes": "Jaipur's old walled city is a UNESCO World Heritage Site with pink-painted buildings, narrow lanes, and traditional bazaars.", "activities": ["Hawa Mahal (Palace of Winds) photo session", "Old City bazaar exploration and shopping", "Local market visit for traditional crafts", "Cooking class (optional, learn Rajasthani cuisine)"], "meals": {"breakfast": "Kachori with aloo sabzi", "lunch": "Street food: samosas, chaat, momo", "dinner": "Restaurant dinner or cooking class meal"}},
-            {"day": 6, "city": "Jaipur → Agra", "temperature": "26°C", "cultural_notes": "Travel to Agra (240 km, 5-6 hours by road or 6 hours by train). Agra was the capital of the Mughal Empire and home to the world-famous Taj Mahal.", "activities": ["Morning departure from Jaipur", "Afternoon arrival in Agra", "Evening light show at Taj Mahal", "Sunset viewing from Mehtab Bagh"], "meals": {"breakfast": "Early breakfast before departure", "lunch": "En-route or Agra arrival meal", "dinner": "Mughlai cuisine dinner in Agra"}},
-            {"day": 7, "city": "Agra", "temperature": "26°C", "cultural_notes": "Agra is home to the Taj Mahal, one of the Seven Wonders of the World, built by Mughal Emperor Shah Jahan as a monument to love.", "activities": ["Sunrise at Taj Mahal (ethereal experience)", "Tour Taj Mahal and gardens", "Visit Agra Fort (Mughal fortress)", "Local marble inlay workshop visit", "Shopping at Agra bazaars"], "meals": {"breakfast": "Early breakfast, then Taj Mahal sunrise", "lunch": "Petha (sweet) and traditional Mughlai food", "dinner": "Dinner with riverside views"}},
-        ]
+# Comprehensive itinerary database (scalable structure)
+ITINERARIES_DB = {
+    "India": {
+        "Wildlife": {
+            "Kaziranga Safari": {
+                "cities": ["Guwahati", "Kaziranga"],
+                "days_per_city": {"Guwahati": 1, "Kaziranga": 3},
+                "description": "Rhino and tiger spotting in Assam's premier wildlife sanctuary",
+                "themes": ["Wildlife", "Nature", "Adventure"],
+                "best_season": "November to April"
+            },
+            "Tiger Quest Bandhavgarh": {
+                "cities": ["Jabalpur", "Bandhavgarh"],
+                "days_per_city": {"Jabalpur": 1, "Bandhavgarh": 4},
+                "description": "Tiger spotting in Bandhavgarh National Park",
+                "themes": ["Wildlife", "Adventure", "Photography"],
+                "best_season": "November to June"
+            },
+            "Ranthambore Tigers": {
+                "cities": ["Jaipur", "Sawai Madhopur"],
+                "days_per_city": {"Jaipur": 2, "Sawai Madhopur": 3},
+                "description": "Tiger safaris in Ranthambore National Park",
+                "themes": ["Wildlife", "Adventure", "Photography"],
+                "best_season": "October to June"
+            },
+            "Kanha Tigers": {
+                "cities": ["Jabalpur", "Kanha"],
+                "days_per_city": {"Jabalpur": 1, "Kanha": 3},
+                "description": "Striped tigers and gaur in Kanha National Park",
+                "themes": ["Wildlife", "Adventure"],
+                "best_season": "November to May"
+            },
+            "Corbett National Park": {
+                "cities": ["Delhi", "Nainital", "Corbett"],
+                "days_per_city": {"Delhi": 1, "Nainital": 1, "Corbett": 3},
+                "description": "Tigers and adventure in Uttarakhand",
+                "themes": ["Wildlife", "Adventure", "Nature"],
+                "best_season": "November to June"
+            },
+        },
+        "Cultural": {
+            "Golden Triangle": {
+                "cities": ["Delhi", "Jaipur", "Agra"],
+                "days_per_city": {"Delhi": 2, "Jaipur": 2, "Agra": 2},
+                "description": "India's most iconic cultural route",
+                "themes": ["Culture", "History", "Architecture"],
+                "best_season": "October to March"
+            },
+            "Temple Trail Varanasi": {
+                "cities": ["Delhi", "Varanasi"],
+                "days_per_city": {"Delhi": 2, "Varanasi": 4},
+                "description": "Sacred temples and spiritual experiences",
+                "themes": ["Culture", "Spiritual", "History"],
+                "best_season": "October to March"
+            },
+            "Rajasthan Royal": {
+                "cities": ["Jaipur", "Jodhpur", "Udaipur"],
+                "days_per_city": {"Jaipur": 3, "Jodhpur": 2, "Udaipur": 3},
+                "description": "Royal palaces and forts of Rajasthan",
+                "themes": ["Culture", "Architecture", "History"],
+                "best_season": "October to March"
+            },
+            "South Indian Temples": {
+                "cities": ["Chennai", "Madurai", "Thiruvananthapuram"],
+                "days_per_city": {"Chennai": 2, "Madurai": 2, "Thiruvananthapuram": 2},
+                "description": "Ancient Dravidian temples and traditions",
+                "themes": ["Culture", "Spiritual", "History"],
+                "best_season": "October to March"
+            },
+            "Kerala Backwater Culture": {
+                "cities": ["Kochi", "Munnar", "Thiruvananthapuram"],
+                "days_per_city": {"Kochi": 2, "Munnar": 2, "Thiruvananthapuram": 2},
+                "description": "Spices, backwaters, and culture",
+                "themes": ["Culture", "Nature", "Food"],
+                "best_season": "September to May"
+            },
+        },
+        "Beaches": {
+            "Goa Paradise": {
+                "cities": ["Mumbai", "Goa"],
+                "days_per_city": {"Mumbai": 2, "Goa": 4},
+                "description": "White sand beaches and Portuguese heritage",
+                "themes": ["Beaches", "Water Sports", "Relaxation"],
+                "best_season": "October to May"
+            },
+            "Kerala Beach Hop": {
+                "cities": ["Kochi", "Munnar", "Alleppey", "Varkala"],
+                "days_per_city": {"Kochi": 1, "Munnar": 2, "Alleppey": 2, "Varkala": 2},
+                "description": "Beaches and backwaters of Kerala",
+                "themes": ["Beaches", "Nature", "Relaxation"],
+                "best_season": "August to March"
+            },
+            "Andaman Beaches": {
+                "cities": ["Port Blair", "Havelock", "Neil Island"],
+                "days_per_city": {"Port Blair": 1, "Havelock": 3, "Neil Island": 2},
+                "description": "Tropical paradise and island adventures",
+                "themes": ["Beaches", "Water Sports", "Nature"],
+                "best_season": "November to May"
+            },
+            "Pondicherry Escape": {
+                "cities": ["Chennai", "Pondicherry"],
+                "days_per_city": {"Chennai": 1, "Pondicherry": 3},
+                "description": "French colonial town and beach relaxation",
+                "themes": ["Beaches", "Culture", "History"],
+                "best_season": "October to March"
+            },
+        },
+        "Adventure": {
+            "Ladakh Extreme": {
+                "cities": ["Delhi", "Leh", "Nubra Valley", "Pangong"],
+                "days_per_city": {"Delhi": 1, "Leh": 2, "Nubra Valley": 2, "Pangong": 2},
+                "description": "High altitude adventure and stunning landscapes",
+                "themes": ["Adventure", "Trekking", "Nature"],
+                "best_season": "June to September"
+            },
+            "Himalayan Trek": {
+                "cities": ["Delhi", "Shimla", "Manali", "Rohtang"],
+                "days_per_city": {"Delhi": 1, "Shimla": 2, "Manali": 3, "Rohtang": 1},
+                "description": "Mountain trekking and alpine scenery",
+                "themes": ["Adventure", "Trekking", "Nature"],
+                "best_season": "April to October"
+            },
+            "Auli Skiing": {
+                "cities": ["Delhi", "Auli"],
+                "days_per_city": {"Delhi": 1, "Auli": 3},
+                "description": "Skiing and snow sports in the Himalayas",
+                "themes": ["Adventure", "Winter Sports"],
+                "best_season": "December to March"
+            },
+            "Desert Safari": {
+                "cities": ["Jaisalmer", "Sam Sand Dunes"],
+                "days_per_city": {"Jaisalmer": 2, "Sam Sand Dunes": 2},
+                "description": "Camel safaris and desert camps",
+                "themes": ["Adventure", "Desert", "Nature"],
+                "best_season": "October to March"
+            },
+        },
+        "Spiritual": {
+            "Yoga & Wellness": {
+                "cities": ["Delhi", "Rishikesh"],
+                "days_per_city": {"Delhi": 1, "Rishikesh": 5},
+                "description": "Yoga, meditation, and spiritual retreats",
+                "themes": ["Spiritual", "Wellness", "Yoga"],
+                "best_season": "September to May"
+            },
+            "Sacred Pilgrimage": {
+                "cities": ["Haridwar", "Varanasi", "Prayagraj"],
+                "days_per_city": {"Haridwar": 2, "Varanasi": 3, "Prayagraj": 2},
+                "description": "Holy Ganges and sacred sites",
+                "themes": ["Spiritual", "Pilgrimage", "History"],
+                "best_season": "October to March"
+            },
+        },
+        "Festivals": {
+            "Holi Celebration": {
+                "cities": ["Delhi", "Jaipur", "Mathura"],
+                "days_per_city": {"Delhi": 1, "Jaipur": 1, "Mathura": 2},
+                "description": "Festival of colors celebration",
+                "themes": ["Festival", "Culture", "Celebration"],
+                "best_season": "March"
+            },
+            "Diwali": {
+                "cities": ["Delhi", "Jaipur", "Varanasi"],
+                "days_per_city": {"Delhi": 2, "Jaipur": 2, "Varanasi": 2},
+                "description": "Festival of lights across India",
+                "themes": ["Festival", "Culture", "Spiritual"],
+                "best_season": "October-November"
+            },
+            "Pushkar Camel Fair": {
+                "cities": ["Jaipur", "Pushkar"],
+                "days_per_city": {"Jaipur": 2, "Pushkar": 3},
+                "description": "Colorful camel fair and cultural celebration",
+                "themes": ["Festival", "Culture", "Markets"],
+                "best_season": "November-December"
+            },
+        },
     },
-    "Agra-Varanasi": {
-        "title": "Spiritual Journey: Agra to Varanasi",
-        "overview": "Journey from the Mughal grandeur of Agra to the spiritual heart of India in Varanasi. Experience two of India's most significant cultural destinations and the sacred Ganges River.",
-        "best_time": "October to March (pleasant weather, spiritually auspicious)",
-        "budget_estimate": "$1,500-2,200 per person for 7 days",
-        "visa_info": "Indian Tourist Visa (60 days) required",
-        "best_experiences": ["Sunrise aarti (prayer ritual) on Ganges ghats", "Boat ride at sunrise on the Ganges", "Varanasi evening aarti ceremony", "Taj Mahal at sunrise", "Buddhist sites visit (Sarnath)"],
-        "packing_tips": ["Modest clothing for temples and spiritual sites", "Comfortable water-resistant shoes", "Shawl or scarf for temple visits", "Mosquito repellent for Varanasi", "Motion sickness medication for boat rides", "Respectful attitude towards religious practices"],
-        "days": [
-            {"day": 1, "city": "Agra", "temperature": "26°C", "cultural_notes": "Begin your spiritual journey in Agra, home to the Taj Mahal, a monument to eternal love built by Mughal Emperor Shah Jahan.", "activities": ["Arrival and hotel check-in", "Sunset viewing at Taj Mahal", "Evening walk in Agra town"], "meals": {"breakfast": "Hotel breakfast", "lunch": "Local Mughlai cuisine", "dinner": "Traditional Indian dinner"}},
-            {"day": 2, "city": "Agra", "temperature": "26°C", "cultural_notes": "Explore Agra's historical monuments including the Taj Mahal, Agra Fort, and local bazaars.", "activities": ["Pre-dawn departure for Taj Mahal sunrise", "Guided Taj Mahal tour", "Agra Fort exploration", "Marble inlay workshop visit"], "meals": {"breakfast": "Before Taj visit", "lunch": "Local specialties", "dinner": "Regional cuisine"}},
-            {"day": 3, "city": "Agra → Varanasi", "temperature": "27°C", "cultural_notes": "Travel to Varanasi, the spiritual heart of India and one of the world's oldest cities. Flight takes 2 hours or train journey takes 14-16 hours.", "activities": ["Morning departure from Agra", "Flight or train to Varanasi", "Afternoon arrival and hotel check-in", "Evening preparation for night aarti"], "meals": {"breakfast": "Early departure meal", "lunch": "En-route meal", "dinner": "Hotel or restaurant meal"}},
-            {"day": 4, "city": "Varanasi", "temperature": "27°C", "cultural_notes": "Varanasi is Hinduism's holiest city, where pilgrims come to bathe in the Ganges River. The city represents the eternal cycle of life, death, and rebirth.", "activities": ["Pre-dawn Ganges boat ride to witness sunrise aarti", "Visit to Kashi Vishwanath Temple (Golden Temple)", "Exploration of ghats (riverbanks)", "Evening Ganga Aarti ceremony"], "meals": {"breakfast": "Hotel breakfast before dawn boat ride", "lunch": "Local vegetarian cuisine", "dinner": "Dinner with Ganges views"}},
-            {"day": 5, "city": "Varanasi", "temperature": "27°C", "cultural_notes": "Varanasi is known for its narrow alleyways, temples, and the sacred ritual of Ghat ceremonies that continue for thousands of years.", "activities": ["Sarnath visit (Buddhist pilgrimage site where Buddha gave his first sermon)", "Sarnath Museum exploration", "Chaukhandi Stupa visit", "Return to Varanasi for evening aarti"], "meals": {"breakfast": "Hotel breakfast", "lunch": "Buddhist monastery vegetarian food", "dinner": "Varanasi traditional cuisine"}},
-            {"day": 6, "city": "Varanasi", "temperature": "27°C", "cultural_notes": "Experience the daily spiritual life in Varanasi, one of the oldest living cities in the world.", "activities": ["Morning exploration of local bazaars", "Silk weaving workshop visit", "Traditional prayer session at temple", "Cooking class (optional)"], "meals": {"breakfast": "Local street breakfast", "lunch": "Vegetarian thali", "dinner": "Cooking class meal or restaurant"}},
-            {"day": 7, "city": "Varanasi", "temperature": "27°C", "cultural_notes": "Your final day in Varanasi - take in the spiritual essence and reflect on your journey through sacred India.", "activities": ["Optional: sunrise boat ride if not done earlier", "Last-minute shopping and temple visits", "Departure preparation", "Evening departure or next day travel"], "meals": {"breakfast": "Hotel breakfast", "lunch": "Favorite meal location revisited", "dinner": "Farewell dinner or travel meal"}},
-        ]
+    "Nepal": {
+        "Adventure": {
+            "Everest Base Camp Trek": {
+                "cities": ["Kathmandu", "Lukla", "EBC"],
+                "days_per_city": {"Kathmandu": 2, "Lukla": 1, "EBC": 10},
+                "description": "Trek to the base of Mount Everest",
+                "themes": ["Adventure", "Trekking", "Mountain"],
+                "best_season": "September to November, March to May"
+            },
+            "Annapurna Circuit": {
+                "cities": ["Kathmandu", "Pokhara", "Annapurna"],
+                "days_per_city": {"Kathmandu": 2, "Pokhara": 2, "Annapurna": 12},
+                "description": "World's most popular trekking circuit",
+                "themes": ["Adventure", "Trekking", "Mountain"],
+                "best_season": "September to November, March to May"
+            },
+            "Kathmandu Valley Trek": {
+                "cities": ["Kathmandu", "Nagarkot", "Bhaktapur"],
+                "days_per_city": {"Kathmandu": 2, "Nagarkot": 2, "Bhaktapur": 2},
+                "description": "Cultural and nature trekking near Kathmandu",
+                "themes": ["Adventure", "Culture", "Hiking"],
+                "best_season": "Year-round"
+            },
+        },
+        "Cultural": {
+            "Kathmandu Valley Temples": {
+                "cities": ["Kathmandu", "Patan", "Bhaktapur"],
+                "days_per_city": {"Kathmandu": 3, "Patan": 2, "Bhaktapur": 2},
+                "description": "UNESCO temples and Newar architecture",
+                "themes": ["Culture", "History", "Architecture"],
+                "best_season": "Year-round"
+            },
+            "Pokhara Exploration": {
+                "cities": ["Kathmandu", "Pokhara"],
+                "days_per_city": {"Kathmandu": 2, "Pokhara": 3},
+                "description": "Lake city and mountain views",
+                "themes": ["Culture", "Nature", "Relaxation"],
+                "best_season": "September to November, March to May"
+            },
+        },
+        "Spiritual": {
+            "Pilgrimage Journey": {
+                "cities": ["Kathmandu", "Lumbini", "Chitwan"],
+                "days_per_city": {"Kathmandu": 2, "Lumbini": 2, "Chitwan": 2},
+                "description": "Buddhist pilgrimage sites",
+                "themes": ["Spiritual", "Pilgrimage", "Culture"],
+                "best_season": "Year-round"
+            },
+        },
     },
-    "Mumbai-Goa": {
-        "title": "Coastal Paradise: Mumbai to Goa",
-        "overview": "Explore the vibrant energy of Mumbai and relax on the pristine beaches of Goa. Experience the contrast between India's bustling metropolis and its laid-back beach culture.",
-        "best_time": "October to May (dry season, ideal for beaches)",
-        "budget_estimate": "$1,400-2,000 per person for 7 days",
-        "visa_info": "Indian Tourist Visa (60 days) required",
-        "best_experiences": ["Gateway of India and Art Deco architecture", "Beach hopping in Goa", "Portuguese heritage exploration", "Spice plantation tours", "Water sports and adventure activities"],
-        "packing_tips": ["Light summer clothing", "Beach essentials: swimwear, sunscreen, flip-flops", "Light rain jacket (occasional showers)", "Camera for beach photography", "Water shoes for rocky beaches", "Casual evening wear for restaurants"],
-        "days": [
-            {"day": 1, "city": "Mumbai", "temperature": "28°C", "cultural_notes": "Mumbai is India's financial and entertainment capital, a city of Bollywood dreams and cosmopolitan culture.", "activities": ["Arrival and hotel check-in", "Evening stroll at Marine Drive", "Dinner with sea views"], "meals": {"breakfast": "Hotel breakfast", "lunch": "Local Mumbai cuisine", "dinner": "Seafood or international cuisine"}},
-            {"day": 2, "city": "Mumbai", "temperature": "28°C", "cultural_notes": "Mumbai blends modernity with history, showcasing India's colonial heritage and contemporary aspirations.", "activities": ["Gateway of India monument visit", "Taj Palace Hotel exploration", "Elephanta Caves boat trip (UNESCO site)", "Colaba Causeway shopping"], "meals": {"breakfast": "Hotel breakfast", "lunch": "Seafood at Colaba", "dinner": "Fine dining experience"}},
-            {"day": 3, "city": "Mumbai → Goa", "temperature": "30°C", "cultural_notes": "Travel to Goa (590 km, 10-12 hours by road, 12-14 hours by train, or 1.5 hours by flight). Goa is India's smallest state with a unique Portuguese heritage.", "activities": ["Morning departure from Mumbai", "Scenic journey along coastal route", "Afternoon arrival in Goa", "Beach relaxation and sunset"], "meals": {"breakfast": "Early departure meal", "lunch": "En-route meal", "dinner": "Goan cuisine dinner"}},
-            {"day": 4, "city": "Goa", "temperature": "30°C", "cultural_notes": "Goa was a Portuguese colony until 1961 and retains a unique culture blend - Indian spirituality with European architecture and cuisine.", "activities": ["Baga Beach relaxation and water sports", "Anjuna Beach exploration", "Shopping at Anjuna flea market (if Wednesday)", "Fort Aguada visit (historical fort)"], "meals": {"breakfast": "Beach café breakfast", "lunch": "Fresh seafood by beach", "dinner": "Beachside restaurant"}},
-            {"day": 5, "city": "Goa", "temperature": "30°C", "cultural_notes": "Goa's heritage includes Portuguese forts, churches, temples, and a unique fusion cuisine.", "activities": ["Spice plantation tour with lunch", "Old Goa churches and heritage sites", "Basilica da Bom Jesus visit", "Local market exploration"], "meals": {"breakfast": "Hotel breakfast", "lunch": "Spice plantation lunch", "dinner": "Authentic Goan cuisine"}},
-            {"day": 6, "city": "Goa", "temperature": "30°C", "cultural_notes": "Goa offers perfect beach relaxation combined with adventure activities and spiritual experiences.", "activities": ["Dolphin spotting boat ride", "Sinquerim Beach exploration", "Paragliding or water sports", "Sunset beach walk"], "meals": {"breakfast": "Beach hut breakfast", "lunch": "Beachfront restaurant", "dinner": "Festive Goan dinner"}},
-            {"day": 7, "city": "Goa", "temperature": "30°C", "cultural_notes": "Your final day in paradise - soak in the beach vibes and coastal tranquility.", "activities": ["Last beach visit and swimming", "Shopping for souvenirs and spices", "Relaxation and packing", "Departure preparation"], "meals": {"breakfast": "Favorite café breakfast", "lunch": "Last beach meal", "dinner": "Farewell dinner or travel"}},
-        ]
+    "Bhutan": {
+        "Cultural": {
+            "Thimphu to Paro": {
+                "cities": ["Thimphu", "Paro"],
+                "days_per_city": {"Thimphu": 3, "Paro": 3},
+                "description": "Capital and sacred valley exploration",
+                "themes": ["Culture", "Spiritual", "Architecture"],
+                "best_season": "March to May, September to November"
+            },
+            "Punakha Valley": {
+                "cities": ["Thimphu", "Punakha", "Paro"],
+                "days_per_city": {"Thimphu": 2, "Punakha": 3, "Paro": 2},
+                "description": "Dzongs and traditional villages",
+                "themes": ["Culture", "History", "Architecture"],
+                "best_season": "March to May, September to November"
+            },
+        },
+        "Spiritual": {
+            "Tiger's Nest & Monasteries": {
+                "cities": ["Paro", "Punakha", "Bumthang"],
+                "days_per_city": {"Paro": 3, "Punakha": 2, "Bumthang": 2},
+                "description": "Sacred Buddhist sites and monasteries",
+                "themes": ["Spiritual", "Culture", "Trekking"],
+                "best_season": "March to May, September to November"
+            },
+            "Spiritual Retreat": {
+                "cities": ["Thimphu", "Paro", "Punakha"],
+                "days_per_city": {"Thimphu": 2, "Paro": 3, "Punakha": 2},
+                "description": "Meditation and spiritual practices",
+                "themes": ["Spiritual", "Wellness", "Culture"],
+                "best_season": "March to May, September to November"
+            },
+        },
+        "Adventure": {
+            "Druk Path Trek": {
+                "cities": ["Thimphu", "Paro"],
+                "days_per_city": {"Thimphu": 2, "Paro": 5},
+                "description": "High altitude mountain trekking",
+                "themes": ["Adventure", "Trekking", "Nature"],
+                "best_season": "March to May, September to October"
+            },
+        },
     }
 }
 
@@ -179,233 +378,199 @@ if 'itinerary' not in st.session_state:
     st.session_state.itinerary = None
 if 'generated' not in st.session_state:
     st.session_state.generated = False
+if 'custom_days' not in st.session_state:
+    st.session_state.custom_days = {}
 
-# Header
-col1, col2 = st.columns([1, 4])
+# Header with Logo
+col1, col2, col3 = st.columns([1, 2, 1])
 with col1:
     st.markdown("🌸")
 with col2:
     st.markdown('<div class="main-header">India Reisen</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-header">Immersive Cultural Journeys Across India</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-header">Full Service Immersive Journeys</div>', unsafe_allow_html=True)
+with col3:
+    st.markdown("🌸")
 
 st.divider()
 
-# Main selection section
-st.markdown('<div class="section-title">Select Your Journey</div>', unsafe_allow_html=True)
+# Selection section
+st.markdown('<div class="section-title">Plan Your Journey</div>', unsafe_allow_html=True)
 
-# Available routes
-available_routes = list(ITINERARY_TEMPLATES.keys())
-selected_route = st.selectbox(
-    "Choose a route",
-    available_routes,
-    help="Select a pre-designed route"
-)
-
-# Customize duration
-st.markdown("**Customize Your Journey**")
-col1, col2 = st.columns(2)
+col1, col2, col3 = st.columns(3)
 
 with col1:
-    include_dates = st.checkbox("Include specific travel dates")
-    if include_dates:
-        start_date = st.date_input("Start Date")
-        num_days = st.number_input("Number of Days", 3, 30, 7)
-    else:
-        start_date = None
-        num_days = st.number_input("Number of Days", 3, 30, 7)
+    country = st.selectbox("Select Country", list(ITINERARIES_DB.keys()))
 
 with col2:
-    st.markdown("**Hotel Preferences**")
-    st.info("Hotels will be suggested based on cities in your itinerary")
+    if country in ITINERARIES_DB:
+        themes = list(ITINERARIES_DB[country].keys())
+        selected_theme = st.selectbox("Select Theme", themes)
+
+with col3:
+    if country in ITINERARIES_DB and selected_theme in ITINERARIES_DB[country]:
+        itineraries = list(ITINERARIES_DB[country][selected_theme].keys())
+        selected_itinerary = st.selectbox("Select Itinerary", itineraries)
 
 st.divider()
 
-# Generate button
-col1, col2, col3 = st.columns([1, 1, 1])
-with col2:
-    if st.button("✨ Generate Itinerary", use_container_width=True, type="primary"):
-        template = ITINERARY_TEMPLATES[selected_route]
+# Get selected itinerary details
+if country in ITINERARIES_DB and selected_theme in ITINERARIES_DB[country] and selected_itinerary in ITINERARIES_DB[country][selected_theme]:
+    itin = ITINERARIES_DB[country][selected_theme][selected_itinerary]
+    
+    st.markdown('<div class="section-title">Customize Days per City</div>', unsafe_allow_html=True)
+    
+    # Display and customize days for each city
+    cols = st.columns(len(itin["cities"]))
+    custom_days = {}
+    
+    for idx, city in enumerate(itin["cities"]):
+        with cols[idx]:
+            default_days = itin["days_per_city"].get(city, 2)
+            custom_days[city] = st.number_input(
+                f"Days in {city}",
+                min_value=1,
+                max_value=30,
+                value=default_days,
+                key=f"days_{city}"
+            )
+    
+    st.session_state.custom_days = custom_days
+    total_days = sum(custom_days.values())
+    st.info(f"📅 **Total Journey Duration: {total_days} days**")
+    
+    # Display itinerary info
+    st.markdown('<div class="section-title">Journey Overview</div>', unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write(f"**Description:** {itin.get('description', 'Custom journey')}")
+    with col2:
+        st.write(f"**Best Season:** {itin.get('best_season', 'Year-round')}")
+    
+    # Draw routing map
+    st.markdown('<div class="section-title">Journey Route Map</div>', unsafe_allow_html=True)
+    
+    # Create map centered on first city
+    first_city = itin["cities"][0]
+    if first_city in CITY_COORDINATES:
+        first_coords = CITY_COORDINATES[first_city]
         
-        # Adapt template to selected duration
-        total_days = len(template["days"])
-        if num_days < total_days:
-            selected_days = [template["days"][0]] + template["days"][-(num_days-1):]
-            for i, day in enumerate(selected_days, 1):
-                day["day"] = i
-            template["days"] = selected_days
-        elif num_days > total_days:
-            extra_days_needed = num_days - total_days
-            new_days = template["days"].copy()
-            for i in range(extra_days_needed):
-                new_day = template["days"][(i + 1) % len(template["days"])].copy()
-                new_day["day"] = len(new_days) + 1
-                new_days.append(new_day)
-            template["days"] = new_days
+        m = folium.Map(
+            location=first_coords,
+            zoom_start=6,
+            tiles="OpenStreetMap"
+        )
         
-        st.session_state.itinerary = template
+        # Add markers for each city
+        colors = ['red', 'blue', 'green', 'purple', 'orange', 'darkred', 'darkblue', 'darkgreen']
+        
+        for idx, city in enumerate(itin["cities"]):
+            if city in CITY_COORDINATES:
+                coords = CITY_COORDINATES[city]
+                color = colors[idx % len(colors)]
+                days = custom_days.get(city, itin["days_per_city"].get(city, 1))
+                
+                folium.Marker(
+                    location=coords,
+                    popup=f"<b>{city}</b><br>Days: {days}",
+                    tooltip=city,
+                    icon=folium.Icon(color=color, icon='info-sign', prefix='glyphicon')
+                ).add_to(m)
+        
+        # Draw route lines
+        route_coords = []
+        for city in itin["cities"]:
+            if city in CITY_COORDINATES:
+                route_coords.append(CITY_COORDINATES[city])
+        
+        if len(route_coords) > 1:
+            folium.PolyLine(
+                route_coords,
+                color='red',
+                weight=2,
+                opacity=0.7,
+                popup='Journey Route'
+            ).add_to(m)
+        
+        st_folium(m, width=1200, height=400)
+    
+    st.divider()
+    
+    # Generate button
+    if st.button("✨ Generate Full Itinerary", use_container_width=True, type="primary"):
+        st.session_state.itinerary = itin
         st.session_state.generated = True
-        st.session_state.selected_route = selected_route
-        st.session_state.start_date = start_date
-        st.session_state.num_days = num_days
+        st.session_state.selected_country = country
+        st.session_state.selected_theme = selected_theme
+        st.session_state.selected_itinerary = selected_itinerary
         st.success("✅ Itinerary generated successfully!")
 
 # Display generated itinerary
 if st.session_state.generated and st.session_state.itinerary:
-    itinerary = st.session_state.itinerary
+    itin = st.session_state.itinerary
     
-    st.markdown('<div class="section-title">Your Personalized Journey</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Your Customized Journey</div>', unsafe_allow_html=True)
     
-    # Overview
-    st.markdown(f"### {itinerary.get('title', 'India Reisen Journey')}")
-    st.markdown(itinerary.get('overview', ''))
+    st.markdown(f"### {st.session_state.selected_itinerary}")
+    st.markdown(f"**Country:** {st.session_state.selected_country} | **Theme:** {st.session_state.selected_theme}")
+    st.markdown(f"**Route:** {' → '.join(itin['cities'])}")
+    st.markdown(f"**Total Duration:** {sum(st.session_state.custom_days.values())} days")
     
-    # Key info cards
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.markdown(f"""
-        <div class="card">
-            <strong>📅 Best Time</strong><br>
-            {itinerary.get('best_time', 'Oct-Mar')}
-        </div>
-        """, unsafe_allow_html=True)
+    # Day-by-day summary
+    st.markdown('<div class="section-title">Journey Breakdown</div>', unsafe_allow_html=True)
     
-    with col2:
-        st.markdown(f"""
-        <div class="card">
-            <strong>💰 Budget</strong><br>
-            {itinerary.get('budget_estimate', 'Contact us')}
-        </div>
-        """, unsafe_allow_html=True)
+    day_counter = 1
+    for city in itin["cities"]:
+        days = st.session_state.custom_days.get(city, itin["days_per_city"].get(city, 1))
+        
+        with st.expander(f"**{city}** - Days {day_counter} to {day_counter + days - 1} ({days} days)"):
+            st.write(f"📍 **City:** {city}")
+            st.write(f"🗓️ **Duration:** {days} days")
+            st.write(f"🌍 **Theme:** {', '.join(itin.get('themes', ['Travel']))}")
+            st.write(f"🎯 **Best Season:** {itin.get('best_season', 'Year-round')}")
+            st.write("""
+            #### Suggested Activities:
+            - Local exploration and cultural immersion
+            - Guided tours of major attractions
+            - Local cuisine and dining experiences
+            - Shopping at markets and bazaars
+            - Evening entertainment and relaxation
+            """)
+        
+        day_counter += days
     
-    with col3:
-        st.markdown(f"""
-        <div class="card">
-            <strong>🎒 Duration</strong><br>
-            {st.session_state.num_days} Days
-        </div>
-        """, unsafe_allow_html=True)
+    # Export
+    st.divider()
+    st.markdown('<div class="section-title">Export Your Itinerary</div>', unsafe_allow_html=True)
     
-    with col4:
-        st.markdown(f"""
-        <div class="card">
-            <strong>📋 Visa</strong><br>
-            {itinerary.get('visa_info', 'Check requirements')}
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Day-by-day breakdown
-    st.markdown('<div class="section-title">Day-by-Day Itinerary</div>', unsafe_allow_html=True)
-    
-    for day_info in itinerary.get('days', []):
-        with st.expander(f"Day {day_info.get('day')} - {day_info.get('city', 'Travel')} 🌏"):
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown(f"**📍 Location:** {day_info.get('city', '')}")
-                if day_info.get('temperature'):
-                    st.markdown(f"**🌡️ Weather:** {day_info.get('temperature')}")
-                
-                st.markdown("**Cultural Significance:**")
-                st.write(day_info.get('cultural_notes', ''))
-            
-            with col2:
-                st.markdown("**🍽️ Suggested Meals:**")
-                meals = day_info.get('meals', {})
-                for meal_type, suggestion in meals.items():
-                    st.write(f"• **{meal_type.title()}:** {suggestion}")
-            
-            st.markdown("**📋 Activities:**")
-            for activity in day_info.get('activities', []):
-                st.write(f"• {activity}")
-            
-            # Show hotel if available
-            city = day_info.get('city')
-            base_city = city.split('→')[0].strip() if '→' in city else city
-            
-            if base_city in HOTEL_DATABASE and HOTEL_DATABASE[base_city]:
-                suggested_hotel = HOTEL_DATABASE[base_city][0]
-                st.markdown(f"""
-                **🏨 Suggested Hotel:**
-                - **{suggested_hotel['name']}** ({suggested_hotel['category']})
-                - {suggested_hotel['description']}
-                - Price Range: {suggested_hotel['price_range']}
-                """)
-    
-    # Packing tips
-    st.markdown('<div class="section-title">Packing Tips</div>', unsafe_allow_html=True)
-    for tip in itinerary.get('packing_tips', []):
-        st.write(f"✓ {tip}")
-    
-    # Best experiences
-    if itinerary.get('best_experiences'):
-        st.markdown('<div class="section-title">Must-Do Experiences</div>', unsafe_allow_html=True)
-        for exp in itinerary.get('best_experiences', []):
-            st.write(f"⭐ {exp}")
-    
-    # Export functions
-    def generate_docx_export(itinerary, route_name, start_date, num_days):
+    def generate_docx(itin, country, theme, title):
         doc = Document()
         
-        # Title
-        title = doc.add_paragraph()
-        title_run = title.add_run("🌸 INDIA REISEN")
+        title_para = doc.add_paragraph()
+        title_run = title_para.add_run("🌸 INDIA REISEN")
         title_run.font.size = Pt(28)
         title_run.font.color.rgb = RGBColor(209, 53, 111)
         title_run.bold = True
-        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
         
-        subtitle = doc.add_paragraph("Immersive Cultural Journey")
-        subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        subtitle_run = subtitle.runs[0]
-        subtitle_run.font.color.rgb = RGBColor(212, 165, 116)
-        subtitle_run.font.size = Pt(14)
+        doc.add_paragraph(title).style = 'Heading 1'
+        doc.add_paragraph(f"Country: {country}").style = 'Heading 2'
+        doc.add_paragraph(f"Theme: {theme}")
+        doc.add_paragraph(f"Total Duration: {sum(st.session_state.custom_days.values())} days")
         
-        # Journey Info
-        doc.add_paragraph(f"Journey: {route_name}").style = 'Heading 2'
-        doc.add_paragraph(f"Duration: {num_days} days")
-        if start_date:
-            doc.add_paragraph(f"Start Date: {start_date}")
+        doc.add_heading('Journey Route', level=2).runs[0].font.color.rgb = RGBColor(209, 53, 111)
+        doc.add_paragraph(' → '.join(itin['cities']))
         
-        # Overview
-        doc.add_heading('Overview', level=2).runs[0].font.color.rgb = RGBColor(209, 53, 111)
-        doc.add_paragraph(itinerary.get('overview', ''))
+        doc.add_heading('Daily Breakdown', level=2).runs[0].font.color.rgb = RGBColor(209, 53, 111)
         
-        # Day by day
-        doc.add_heading('Day-by-Day Itinerary', level=2).runs[0].font.color.rgb = RGBColor(209, 53, 111)
+        day_counter = 1
+        for city in itin["cities"]:
+            days = st.session_state.custom_days.get(city, itin["days_per_city"].get(city, 1))
+            doc.add_heading(f"{city} - {days} days", level=3)
+            doc.add_paragraph(f"Days: {day_counter} to {day_counter + days - 1}")
+            doc.add_paragraph("Includes local exploration, guided tours, cultural immersion, and dining experiences")
+            day_counter += days
         
-        for day in itinerary.get('days', []):
-            doc.add_heading(f"Day {day.get('day')} - {day.get('city')}", level=3)
-            doc.add_paragraph(f"Temperature: {day.get('temperature', 'N/A')}")
-            doc.add_paragraph(day.get('cultural_notes', ''))
-            
-            doc.add_paragraph("Activities:", style='List Bullet')
-            for activity in day.get('activities', []):
-                doc.add_paragraph(activity, style='List Bullet 2')
-            
-            meals = day.get('meals', {})
-            if meals:
-                doc.add_paragraph("Meals:", style='List Bullet')
-                for meal_type, suggestion in meals.items():
-                    doc.add_paragraph(f"{meal_type.title()}: {suggestion}", style='List Bullet 2')
-            
-            city = day.get('city')
-            base_city = city.split('→')[0].strip() if '→' in city else city
-            if base_city in HOTEL_DATABASE and HOTEL_DATABASE[base_city]:
-                hotel = HOTEL_DATABASE[base_city][0]
-                doc.add_paragraph(f"Suggested Hotel: {hotel['name']} - {hotel['description']}")
-        
-        # Packing tips
-        doc.add_heading('Packing Tips', level=2).runs[0].font.color.rgb = RGBColor(209, 53, 111)
-        for tip in itinerary.get('packing_tips', []):
-            doc.add_paragraph(tip, style='List Bullet')
-        
-        # Best experiences
-        if itinerary.get('best_experiences'):
-            doc.add_heading('Must-Do Experiences', level=2).runs[0].font.color.rgb = RGBColor(209, 53, 111)
-            for exp in itinerary.get('best_experiences', []):
-                doc.add_paragraph(exp, style='List Bullet')
-        
-        # Footer
         doc.add_paragraph()
         footer = doc.add_paragraph("🌸 Book your immersive journey with India Reisen today!")
         footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -415,92 +580,20 @@ if st.session_state.generated and st.session_state.itinerary:
         buffer.seek(0)
         return buffer
     
-    def generate_markdown_export(itinerary, route_name, start_date, num_days):
-        md = f"""# 🌸 INDIA REISEN
-## Immersive Cultural Journey
+    if st.button("📝 Download as DOCX", use_container_width=True):
+        docx_buffer = generate_docx(itin, st.session_state.selected_country, st.session_state.selected_theme, st.session_state.selected_itinerary)
+        st.download_button(
+            label="📥 Download DOCX",
+            data=docx_buffer,
+            file_name=f"India_Reisen_{st.session_state.selected_itinerary}_{datetime.now().strftime('%Y%m%d')}.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            use_container_width=True
+        )
 
-**Journey:** {route_name}  
-**Duration:** {num_days} days  
-"""
-        if start_date:
-            md += f"**Start Date:** {start_date}  \n"
-        
-        md += f"\n## Overview\n{itinerary.get('overview', '')}\n"
-        md += f"\n## Best Time to Visit\n{itinerary.get('best_time', '')}\n"
-        md += f"\n## Budget\n{itinerary.get('budget_estimate', '')}\n"
-        md += f"\n## Visa Information\n{itinerary.get('visa_info', '')}\n"
-        
-        md += "\n## Day-by-Day Itinerary\n"
-        for day in itinerary.get('days', []):
-            md += f"\n### Day {day.get('day')} - {day.get('city')}\n"
-            md += f"**Temperature:** {day.get('temperature', 'N/A')}  \n"
-            md += f"\n{day.get('cultural_notes', '')}\n\n"
-            
-            md += "**Activities:**\n"
-            for activity in day.get('activities', []):
-                md += f"- {activity}\n"
-            
-            meals = day.get('meals', {})
-            if meals:
-                md += "\n**Meals:**\n"
-                for meal_type, suggestion in meals.items():
-                    md += f"- **{meal_type.title()}:** {suggestion}\n"
-            
-            city = day.get('city')
-            base_city = city.split('→')[0].strip() if '→' in city else city
-            if base_city in HOTEL_DATABASE and HOTEL_DATABASE[base_city]:
-                hotel = HOTEL_DATABASE[base_city][0]
-                md += f"\n**Suggested Hotel:** {hotel['name']}  \n{hotel['description']}\n"
-        
-        if itinerary.get('packing_tips'):
-            md += "\n## Packing Tips\n"
-            for tip in itinerary.get('packing_tips', []):
-                md += f"- {tip}\n"
-        
-        if itinerary.get('best_experiences'):
-            md += "\n## Must-Do Experiences\n"
-            for exp in itinerary.get('best_experiences', []):
-                md += f"- {exp}\n"
-        
-        md += "\n---\n*🌸 Book your immersive journey with India Reisen today!*\n"
-        return md
-    
-    # Export options
-    st.divider()
-    st.markdown('<div class="section-title">Export Your Itinerary</div>', unsafe_allow_html=True)
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if st.button("📝 Generate DOCX", use_container_width=True):
-            try:
-                docx_buffer = generate_docx_export(itinerary, st.session_state.selected_route, st.session_state.start_date, st.session_state.num_days)
-                st.download_button(
-                    label="📥 Download DOCX",
-                    data=docx_buffer,
-                    file_name=f"India_Reisen_Itinerary_{datetime.now().strftime('%Y%m%d')}.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    use_container_width=True
-                )
-            except Exception as e:
-                st.error(f"Error: {str(e)}")
-    
-    with col2:
-        if st.button("📋 Generate Markdown", use_container_width=True):
-            md_content = generate_markdown_export(itinerary, st.session_state.selected_route, st.session_state.start_date, st.session_state.num_days)
-            st.download_button(
-                label="📥 Download Markdown",
-                data=md_content,
-                file_name=f"India_Reisen_Itinerary_{datetime.now().strftime('%Y%m%d')}.md",
-                mime="text/markdown",
-                use_container_width=True
-            )
-
-# Footer
 st.divider()
 st.markdown("""
 ---
-**India Reisen** | Immersive Cultural Experiences  
+**India Reisen** | Full Service Immersive Journeys  
 🌐 Destinations: India • Nepal • Bhutan • Tibet • Sri Lanka  
 📱 Follow us: Instagram • Facebook • LinkedIn • YouTube
 
