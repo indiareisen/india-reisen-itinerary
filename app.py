@@ -384,12 +384,12 @@ if 'custom_days' not in st.session_state:
 # Header with Logo
 col1, col2, col3 = st.columns([1, 2, 1])
 with col1:
-    st.markdown("🌸")
+    st.image("https://raw.githubusercontent.com/indiareisen/india-reisen-itinerary/main/logo.png", width=80)
 with col2:
     st.markdown('<div class="main-header">India Reisen</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-header">Full Service Immersive Journeys</div>', unsafe_allow_html=True)
 with col3:
-    st.markdown("🌸")
+    st.image("https://raw.githubusercontent.com/indiareisen/india-reisen-itinerary/main/logo.png", width=80)
 
 st.divider()
 
